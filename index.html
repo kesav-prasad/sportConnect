@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SportConnect Pro | Enterprise Athlete Management</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Animation for switching auth modes */
+.auth-content-animate {
+    animation: authSwap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes authSwap {
+    0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Add a smooth background transition for the role buttons */
+#role-ath, #role-off {
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#role-ath:active, #role-off:active {
+    transform: scale(0.95);
+}
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    display: none; /* Hidden by default */
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* State when button is loading */
+.btn-loading {
+    opacity: 0.8;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn-loading .spinner {
+    display: inline-block;
+}
+        :root {
+            --primary: #0f172a; --accent: #3b82f6; --success: #10b981; --danger: #ef4444;
+            --warning: #f59e0b; --bg: #f8fafc; --white: #ffffff; --text-main: #1e293b;
+            --sidebar-width: 260px;
+        }
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; transition: all 0.2s ease; }
+        body { background: var(--bg); margin: 0; display: flex; color: var(--text-main); min-height: 100vh; }
+
+        /* Layout */
+        /* --- RESPONSIVE LAYOUT LOGIC --- */
+
+/* Default Desktop Styles */
+#sidebar { 
+    width: var(--sidebar-width); 
+    background: var(--primary); 
+    color: white; 
+    height: 100vh; 
+    position: fixed; 
+    padding: 25px; 
+    display: none; 
+    flex-direction: column; 
+    z-index: 1000;
+    transition: transform 0.3s ease;
+}
+
+#main { 
+    margin-left: var(--sidebar-width); 
+    width: calc(100% - var(--sidebar-width)); 
+    padding: 40px; 
+    display: none; 
+}
+
+/* Mobile Menu Button (Hidden on Desktop) */
+#mobile-nav-toggle {
+    display: none;
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 1100;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+/* --- MOBILE STYLES (Phones & Tablets) --- */
+@media (max-width: 768px) {
+    #sidebar {
+        transform: translateX(-100%); /* Hide sidebar off-screen */
+        width: 80%; /* Take up most of the screen when shown */
+        display: flex; /* Override the display:none from JS */
+    }
+
+    #sidebar.active {
+        transform: translateX(0); /* Slide in when active */
+    }
+
+    #main {
+        margin-left: 0;
+        width: 100%;
+        padding: 20px;
+        padding-top: 70px; /* Make room for the mobile toggle */
+    }
+
+    #mobile-nav-toggle {
+        display: block; /* Show toggle on mobile */
+    }
+
+    .auth-box {
+        width: 90%;
+        padding: 25px;
+    }
+
+    .stat-grid {
+        grid-template-columns: 1fr; /* Stack stats vertically */
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr; /* All form fields take full width */
+    }
+
+    .card {
+        padding: 15px;
+    }
+}
+
+        /* Navigation */
+        .nav-link { padding: 14px 18px; border-radius: 10px; cursor: pointer; margin-bottom: 5px; display: flex; align-items: center; color: #94a3b8; text-decoration: none; font-size: 0.95rem; font-weight: 500; }
+        .nav-link:hover { background: #1e293b; color: white; }
+        .nav-link.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+
+        /* UI Components */
+        .card { background: var(--white); border-radius: 16px; padding: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; border-left: 5px solid var(--accent); }
+        .stat-card h3 { margin: 0; font-size: 0.85rem; color: #64748b; text-transform: uppercase; }
+        .stat-card p { margin: 10px 0 0; font-size: 1.8rem; font-weight: 700; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+        .section-header { font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1.2px; margin: 30px 0 15px; grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+        .section-header::after { content: ""; height: 1px; background: #e2e8f0; flex-grow: 1; }
+        
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: #475569; }
+        input, select, textarea { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.95rem; background: #fff; }
+        input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+        .btn { padding: 12px 24px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        
+        .badge { padding: 6px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-approved { background: #d1fae5; color: #065f46; }
+        .status-rejected { background: #fee2e2; color: #991b1b; }
+
+        #auth-container { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; background: #0f172a; position: absolute; top: 0; left: 0; }
+        .auth-box { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 420px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+
+</style>
+</head>
+<body>
+    <button id="mobile-nav-toggle" onclick="toggleSidebar()">Menu ☰</button>
+    <div id="sidebar">
+        <h2 style="margin-bottom: 40px; font-weight: 800; letter-spacing: -1px; font-size: 1.5rem">SportConnect<span style="color:var(--accent)">.</span></h2>
+        <div class="nav-link active" onclick="nav('dash')">📊 Dashboard</div>
+        <div class="nav-link" onclick="nav('profile')" id="nav-p">👤 My Profile</div>
+        <div class="nav-link" onclick="nav('tournaments')">🏆 Tournaments</div>
+        <div class="nav-link" onclick="nav('inbox')" id="nav-i" style="display:none">📩 Registrations</div>
+        <div class="nav-link" onclick="nav('my-registrations')" id="nav-mr">📝 My Applications</div>
+        <div style="margin-top: auto;"><button class="btn btn-danger" style="width: 100%;" onclick="logout()">Sign Out</button></div>
+    </div>
+
+    <div id="auth-container">
+        <div class="auth-box">
+            <h2 id="auth-title" style="margin-top:0; font-size: 1.8rem;">Welcome back</h2>
+            <p style="color: #64748b; margin-bottom: 25px;">Select your role to continue</p>
+            <div style="display:flex; gap:10px; margin-bottom:20px">
+                <button class="btn btn-primary" id="role-ath" onclick="setRole('athlete')" style="flex:1">Athlete</button>
+                <button class="btn" id="role-off" onclick="setRole('official')" style="flex:1; background:#f1f5f9; color:#475569">Official</button>
+            </div>
+            <input type="email" id="email" placeholder="Email Address" style="margin-bottom:15px">
+            <input type="password" id="password" placeholder="Password" style="margin-bottom:20px">
+            <button class="btn btn-primary" id="auth-btn" style="width:100%; padding: 15px" onclick="handleAuth()">
+    <div class="spinner" id="auth-spinner"></div>
+    <span id="auth-btn-text">Continue</span>
+</button>
+            <p style="text-align:center; font-size:0.85rem; margin-top:20px">
+                <a href="#" onclick="toggleAuth()" style="color:var(--accent); text-decoration:none; font-weight:600" id="auth-toggle-text">New here? Create Account</a>
+            </p>
+        </div>
+    </div>
+
+    <div id="main">
+        
+        <div id="page-dash" class="page" style="display:block">
+            <h1 style="font-size: 2rem">Welcome, <span id="user-name-span" style="color: var(--accent)">User</span></h1>
+            <p style="color: #64748b; margin-bottom: 30px;">Here is what's happening in your sports network.</p>
+            
+            <div class="stat-grid">
+                <div class="stat-card"><h3>Active Events</h3><p id="stat-t">0</p></div>
+                <div class="stat-card" style="border-left-color: var(--success)"><h3>Total Applications</h3><p id="stat-a">0</p></div>
+                <div class="stat-card" style="border-left-color: var(--warning)"><h3>Pending Reviews</h3><p id="stat-p">0</p></div>
+            </div>
+
+            <div class="card">
+                <h3>Quick Actions</h3>
+                <div style="display: flex; gap: 15px;">
+                    <button class="btn btn-primary" onclick="nav('tournaments')">Browse Tournaments</button>
+                    <button class="btn" style="background: #e2e8f0;" id="btn-quick-profile" onclick="nav('profile')">Update Profile</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-profile" class="page">
+            <div class="card">
+                <h2>Master Athlete Profile</h2>
+                <div class="form-grid">
+                    <div class="section-header">A. Personal Information</div>
+                    <div><label>Full Name</label><input type="text" id="a-fullname"></div>
+                    <div><label>Date of Birth</label><input type="date" id="a-dob"></div>
+                    <div><label>Gender</label><select id="a-gender"><option>Male</option><option>Female</option><option>Other</option></select></div>
+                    <div><label>Nationality</label><input type="text" id="a-nation"></div>
+
+                    <div class="section-header">B. Contact Information</div>
+                    <div><label>Mobile Number</label><input type="tel" id="a-phone"></div>
+                    <div><label>Address (City, State)</label><input type="text" id="a-address"></div>
+
+                    <div class="section-header">C. Sports Details</div>
+                    <div><label>Primary Sport</label><input type="text" id="a-sport"></div>
+                    <div><label>Level</label><select id="a-level"><option>Beginner</option><option>Intermediate</option><option>Professional</option></select></div>
+
+                    <div class="section-header">D. Documentation</div>
+                    <div><label>Certificate URL</label><input type="text" id="a-cert-link" placeholder="https://..."></div>
+                    <div><label>ID Proof URL</label><input type="text" id="a-id-link" placeholder="https://..."></div>
+                </div>
+                <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                    <button class="btn btn-primary" onclick="updateProfile()">Update Global Profile</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-tournaments" class="page">
+            <div id="official-panel" class="card" style="display:none; border-top: 4px solid var(--accent)">
+                <h3>Host New Tournament</h3>
+                <div class="form-grid">
+                    <div><label>Tournament Name</label><input type="text" id="t-name"></div>
+                    <div><label>Sport Type</label><input type="text" id="t-sport"></div>
+                    <div><label>Level</label><select id="t-level"><option>District</option><option>State</option><option>National</option></select></div>
+                    <div><label>Venue</label><input type="text" id="t-venue"></div>
+                    <div><label>Entry Fee ($)</label><input type="number" id="t-fee"></div>
+                    <div><label>Prize Pool</label><input type="text" id="t-prize"></div>
+                </div>
+                <button class="btn btn-success" style="margin-top:20px" onclick="postTournament()">Launch Tournament</button>
+            </div>
+            
+            <div style="margin: 20px 0; display: flex; justify-content: space-between; align-items: center;">
+                <h2>Available Opportunities</h2>
+                <input type="text" id="t-search" placeholder="Search by sport..." style="width: 250px;" onkeyup="filterTournaments()">
+            </div>
+            <div id="t-list-container"></div>
+        </div>
+
+        <div id="page-my-registrations" class="page">
+            <h2>Track My Applications</h2>
+            <div id="my-apps-list"></div>
+        </div>
+
+        <div id="page-inbox" class="page">
+            <h2>Registrations Inbox</h2>
+            <p style="color: #64748b; margin-bottom: 20px;">Review and verify athlete qualifications below.</p>
+            <div id="official-inbox-list"></div>
+        </div>
+    </div>
+
+    <script>
+    let myAppliedTournamentIds = [];
+    function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('active');
+    
+    // Change button text based on state
+    const btn = document.getElementById('mobile-nav-toggle');
+    btn.innerText = sidebar.classList.contains('active') ? 'Close ✕' : 'Menu ☰';
+}
+
+// Close sidebar automatically when a link is clicked on mobile
+function nav(id) {
+    // ... existing nav code ...
+    
+    if (window.innerWidth <= 768) {
+        toggleSidebar();
+    }
+}
+        // Use your existing Firebase logic here
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUu1W8rPibsW_tS_9B6PbiruGAMB2JgiE",
+            authDomain: "sportconnect-ac7f2.firebaseapp.com",
+            projectId: "sportconnect-ac7f2",
+            storageBucket: "sportconnect-ac7f2.appspot.com",
+            messagingSenderId: "3088377802",
+            appId: "1:3088377802:web:7b0e1d057f282eefa49133"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let role = 'athlete';
+        let isSignup = false;
+        let userData = null;
+
+        function setRole(r) {
+    role = r;
+    const athBtn = document.getElementById('role-ath');
+    const offBtn = document.getElementById('role-off');
+
+    if (r === 'athlete') {
+        athBtn.style.background = 'var(--accent)';
+        athBtn.style.color = 'white';
+        athBtn.style.transform = 'scale(1.05)';
+        
+        offBtn.style.background = '#f1f5f9';
+        offBtn.style.color = '#475569';
+        offBtn.style.transform = 'scale(1)';
+    } else {
+        offBtn.style.background = 'var(--accent)';
+        offBtn.style.color = 'white';
+        offBtn.style.transform = 'scale(1.05)';
+        
+        athBtn.style.background = '#f1f5f9';
+        athBtn.style.color = '#475569';
+        athBtn.style.transform = 'scale(1)';
+    }
+}
+
+        function toggleAuth() {
+    const authBox = document.querySelector('.auth-box');
+    
+    // Add animation class
+    authBox.classList.remove('auth-content-animate');
+    void authBox.offsetWidth; // Trigger reflow to restart animation
+    authBox.classList.add('auth-content-animate');
+
+    // Toggle logic
+    isSignup = !isSignup;
+    
+    const title = document.getElementById('auth-title');
+    const toggleText = document.getElementById('auth-toggle-text');
+    const btnText = document.getElementById('auth-btn-text');
+
+    if (isSignup) {
+        title.innerText = "Create Account";
+        toggleText.innerText = "Have an account? Sign In";
+        btnText.innerText = "Get Started";
+        // Optionally show/hide role selection only on signup if needed
+    } else {
+        title.innerText = "Welcome back";
+        toggleText.innerText = "New here? Create Account";
+        btnText.innerText = "Continue";
+    }
+}
+
+        async function handleAuth() {
+    const e = document.getElementById('email').value;
+    const p = document.getElementById('password').value;
+    const btn = document.getElementById('auth-btn');
+    const btnText = document.getElementById('auth-btn-text');
+    const spinner = document.getElementById('auth-spinner');
+
+    if(!e || !p) return alert("Please fill all fields");
+
+    // START LOADING STATE
+    btn.classList.add('btn-loading');
+    btnText.innerText = isSignup ? "Creating Account..." : "Signing In...";
+    
+    try {
+        if(isSignup) {
+            const res = await auth.createUserWithEmailAndPassword(e, p);
+            await db.collection('users').doc(res.user.uid).set({ 
+                email: e, 
+                role: role, 
+                createdAt: new Date() 
+            });
+        } else {
+            await auth.signInWithEmailAndPassword(e, p);
+        }
+    } catch(err) { 
+        alert(err.message); 
+        // RESET STATE ON ERROR
+        btn.classList.remove('btn-loading');
+        btnText.innerText = "Continue";
+    }
+    // Note: On success, the onAuthStateChanged listener will hide the auth container,
+    // so we don't necessarily need to manually reset the button here.
+}
+
+        function logout() { auth.signOut(); location.reload(); }
+
+        function nav(id) {
+            document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            document.getElementById('page-'+id).style.display = 'block';
+            
+            const activeLink = Array.from(document.querySelectorAll('.nav-link')).find(l => l.getAttribute('onclick').includes(id));
+            if(activeLink) activeLink.classList.add('active');
+
+            if(id === 'tournaments') loadTournaments();
+            if(id === 'inbox') loadOfficialInbox();
+            if(id === 'my-registrations') loadAthleteApps();
+        }
+
+        auth.onAuthStateChanged(async user => {
+            if(user) {
+                const doc = await db.collection('users').doc(user.uid).get();
+                userData = doc.data();
+                document.getElementById('auth-container').style.display = 'none';
+                document.getElementById('sidebar').style.display = 'flex';
+                document.getElementById('main').style.display = 'block';
+                document.getElementById('user-name-span').innerText = userData.a_fullname || "User";
+
+                if(userData.role === 'official') {
+                    document.getElementById('official-panel').style.display = 'block';
+                    document.getElementById('nav-i').style.display = 'flex';
+                    document.getElementById('nav-p').style.display = 'none';
+                    document.getElementById('nav-mr').style.display = 'none';
+                    document.getElementById('btn-quick-profile').style.display = 'none';
+                } else {
+                    // Fill Profile if exists
+                    const fields = ['a-fullname', 'a-dob', 'a-gender', 'a-nation', 'a-phone', 'a-address', 'a-sport', 'a-level', 'a-cert-link', 'a-id-link'];
+                    fields.forEach(f => {
+                        const key = f.replace('-', '_');
+                        if(userData[key]) document.getElementById(f).value = userData[key];
+                    });
+                }
+                updateStats();
+            }
+        });
+
+        async function updateStats() {
+            const tSnap = await db.collection('tournaments').get();
+            document.getElementById('stat-t').innerText = tSnap.size;
+
+            const q = userData.role === 'official' ? 
+                db.collection('apps').where('oid', '==', auth.currentUser.uid) :
+                db.collection('apps').where('aid', '==', auth.currentUser.uid);
+            
+            const aSnap = await q.get();
+            document.getElementById('stat-a').innerText = aSnap.size;
+            document.getElementById('stat-p').innerText = aSnap.docs.filter(d => d.data().status === 'pending').length;
+        }
+
+        async function updateProfile() {
+            const p = {
+                a_fullname: document.getElementById('a-fullname').value,
+                a_dob: document.getElementById('a-dob').value,
+                a_gender: document.getElementById('a-gender').value,
+                a_nation: document.getElementById('a-nation').value,
+                a_phone: document.getElementById('a-phone').value,
+                a_address: document.getElementById('a-address').value,
+                a_sport: document.getElementById('a-sport').value,
+                a_level: document.getElementById('a-level').value,
+                a_cert_link: document.getElementById('a-cert-link').value,
+                a_id_link: document.getElementById('a-id-link').value
+            };
+            await db.collection('users').doc(auth.currentUser.uid).update(p);
+            alert("Profile Updated Successfully!");
+            updateStats();
+        }
+
+        async function postTournament() {
+            const t = {
+                name: document.getElementById('t-name').value,
+                sport: document.getElementById('t-sport').value,
+                level: document.getElementById('t-level').value,
+                venue: document.getElementById('t-venue').value,
+                fee: document.getElementById('t-fee').value,
+                prize: document.getElementById('t-prize').value,
+                officialId: auth.currentUser.uid,
+                createdAt: new Date()
+            };
+            await db.collection('tournaments').add(t);
+            alert("Tournament Published!");
+            loadTournaments();
+        }
+
+        // 1. Function to show the Pop-up
+async function showEventDetails(tid) {
+    const doc = await db.collection('tournaments').doc(tid).get();
+    const t = doc.data();
+    const hasApplied = myAppliedTournamentIds.includes(tid);
+
+    // Populate Modal fields
+    document.getElementById('m-name').innerText = t.name;
+    document.getElementById('m-sport').innerText = t.sport;
+    document.getElementById('m-level').innerText = t.level || "State Level";
+    document.getElementById('m-venue').innerText = t.venue;
+    document.getElementById('m-fee').innerText = `$${t.fee}`;
+    document.getElementById('m-rules').innerText = t.rules || "No specific rules provided by the committee.";
+
+    // Set Footer Button
+    const footer = document.getElementById('modal-footer');
+    if (userData.role === 'athlete') {
+        footer.innerHTML = hasApplied 
+            ? `<button class="btn" style="width:100%; background:#d1fae5; color:#065f46; cursor:default;" disabled>✓ Already Applied</button>`
+            : `<button class="btn btn-primary" style="width:100%;" onclick="apply('${tid}','${t.name}','${t.oid}'); closeModal();">Apply for this Event</button>`;
+    } else {
+        footer.innerHTML = `<button class="btn btn-primary" style="width:100%;" onclick="closeModal()">Close Details</button>`;
+    }
+
+    document.getElementById('event-modal').style.display = 'flex';
+}
+
+// 2. Function to close the Pop-up
+function closeModal() {
+    document.getElementById('event-modal').style.display = 'none';
+}
+
+// 3. Update loadTournaments to make the card clickable
+function loadTournaments() {
+    db.collection('apps').where('aid', '==', auth.currentUser.uid).onSnapshot(appSnap => {
+        myAppliedTournamentIds = appSnap.docs.map(doc => doc.data().tid);
+        
+        db.collection('tournaments').onSnapshot(snap => {
+            const cont = document.getElementById('t-list-container');
+            cont.innerHTML = "<h3>Live Events (Click for details)</h3>";
+            
+            snap.forEach(doc => {
+                const t = doc.data();
+                const hasApplied = myAppliedTournamentIds.includes(doc.id);
+                
+                cont.innerHTML += `
+                    <div class="card" onclick="showEventDetails('${doc.id}')" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; hover:transform:translateY(-2px); border-left: 4px solid var(--accent);">
+                        <div>
+                            <strong style="font-size: 1.1rem;">${t.name}</strong><br>
+                            <small style="color: #64748b;">${t.sport} | ${t.venue}</small>
+                        </div>
+                        <div>
+                            ${hasApplied ? '<span class="badge status-approved">Applied</span>' : '<span style="color:var(--accent); font-weight:600;">View Details →</span>'}
+                        </div>
+                    </div>`;
+            });
+        });
+    });
+}
+
+        async function apply(tid, tname, oid) {
+            if(!userData.a_fullname) return alert("Please complete your profile first!");
+            const confirmApp = confirm(`Apply for ${tname}? Your master profile details will be sent.`);
+            if(!confirmApp) return;
+
+            await db.collection('apps').add({
+                tid, tname, oid,
+                aid: auth.currentUser.uid,
+                athleteDetails: userData,
+                status: 'pending',
+                appliedAt: new Date()
+            });
+            alert("Application submitted!");
+        }
+
+        function loadAthleteApps() {
+    db.collection('apps').where('aid', '==', auth.currentUser.uid).onSnapshot(snap => {
+        const list = document.getElementById('my-apps-list');
+        list.innerHTML = snap.empty ? "<p>You haven't applied to any tournaments yet.</p>" : "";
+        
+        snap.forEach(doc => {
+            const a = doc.data();
+            list.innerHTML += `
+                <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="display:block; margin-bottom: 5px;">${a.tname}</strong>
+                        <span class="badge status-pending">${a.status}</span>
+                    </div>
+                    <button class="btn btn-danger" style="padding: 8px 15px; font-size: 0.8rem;" 
+                        onclick="cancelApplication('${doc.id}')">
+                        Cancel App
+                    </button>
+                </div>`;
+        });
+    });
+}
+
+        function loadOfficialInbox() {
+            db.collection('apps').where('oid', '==', auth.currentUser.uid).onSnapshot(snap => {
+                const list = document.getElementById('official-inbox-list');
+                list.innerHTML = snap.empty ? "<p>No pending registrations.</p>" : "";
+                snap.forEach(doc => {
+                    const a = doc.data();
+                    const det = a.athleteDetails;
+                    if(a.status !== 'pending') return;
+                    list.innerHTML += `
+                        <div class="card">
+                            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:15px">
+                                <div>
+                                    <h3 style="margin:0">${det.a_fullname}</h3>
+                                    <p style="color: var(--accent); margin: 5px 0">Applying for: ${a.tname}</p>
+                                </div>
+                                <div style="display:flex; gap:10px">
+                                    <button class="btn btn-success" onclick="decide('${doc.id}', 'approved')">Verify</button>
+                                    <button class="btn btn-danger" onclick="decide('${doc.id}', 'rejected')">Reject</button>
+                                </div>
+                            </div>
+                            <div class="form-grid" style="background: #f8fafc; padding: 15px; border-radius: 8px; font-size: 0.85rem">
+                                <div><strong>Sport:</strong> ${det.a_sport} (${det.a_level})</div>
+                                <div><strong>Phone:</strong> ${det.a_phone}</div>
+                                <div><strong>Documents:</strong> <a href="${det.a_cert_link}" target="_blank" style="color:var(--accent)">View Certificate</a></div>
+                            </div>
+                        </div>`;
+                });
+            });
+        }
+
+        async function cancelApplication(appId) {
+    if (confirm("Are you sure you want to cancel this application?")) {
+        try {
+            await db.collection('apps').doc(appId).delete();
+            alert("Application successfully cancelled.");
+        } catch (error) {
+            alert("Error cancelling application: " + error.message);
+        }
+    }
+}
+        async function decide(id, s) {
+            await db.collection('apps').doc(id).update({ status: s });
+            alert("Application " + s);
+            updateStats();
+        }
+
+        function filterTournaments() {
+            const val = document.getElementById('t-search').value.toLowerCase();
+            const cards = document.querySelectorAll('#t-list-container .card');
+            cards.forEach(c => {
+                const text = c.innerText.toLowerCase();
+                c.style.display = text.includes(val) ? 'flex' : 'none';
+            });
+        }
+    </script>
+    <div id="event-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:3000; align-items:center; justify-content:center; padding:20px;">
+    <div class="card auth-fade" style="max-width:500px; width:100%; position:relative; max-height:90vh; overflow-y:auto;">
+        <button onclick="closeModal()" style="position:absolute; top:15px; right:15px; border:none; background:none; font-size:1.5rem; cursor:pointer;">✕</button>
+        
+        <h2 id="m-name" style="margin-top:0; color:var(--accent);">Tournament Name</h2>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+            <div><label>Sport</label><p id="m-sport" style="margin:5px 0; font-weight:600;"></p></div>
+            <div><label>Level</label><p id="m-level" style="margin:5px 0; font-weight:600;"></p></div>
+            <div><label>Venue</label><p id="m-venue" style="margin:5px 0; font-weight:600;"></p></div>
+            <div><label>Entry Fee</label><p id="m-fee" style="margin:5px 0; font-weight:600;"></p></div>
+        </div>
+
+        <label>Official Rules & Details</label>
+        <p id="m-rules" style="background:#f1f5f9; padding:15px; border-radius:8px; font-size:0.9rem; line-height:1.5;"></p>
+        
+        <div id="modal-footer" style="margin-top:20px;">
+            </div>
+    </div>
+</div>
+</body>
+</html>
